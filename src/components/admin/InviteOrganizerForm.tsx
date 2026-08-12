@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { UserPlus, Mail, User, Shield, Calendar, CheckCircle, Users } from 'lucide-react';
+import { UserPlus, Mail, User, Shield, Calendar, CheckCircle, Users, Copy } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 
 // Validation schema
@@ -31,19 +31,18 @@ type Event = {
 };
 
 interface InviteOrganizerFormProps {
-  onSubmit?: (data: InviteOrganizerFormInput) => Promise<void>;
   isSubmitting?: boolean;
   initialData?: Partial<InviteOrganizerFormInput>;
 }
 
 export function InviteOrganizerForm({ 
-  onSubmit, 
   isSubmitting = false, 
   initialData 
 }: InviteOrganizerFormProps) {
   const [events, setEvents] = useState<Event[]>([]);
   const [eventsLoaded, setEventsLoaded] = useState(false);
   const [invitationSuccess, setInvitationSuccess] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const { user, loading: authLoading } = useAuth();
 
@@ -81,34 +80,32 @@ export function InviteOrganizerForm({
   const handleFormSubmit: SubmitHandler<InviteOrganizerFormInput> = async (data) => {
     try {
       setInvitationSuccess(false);
+      setInviteLink('');
       
       const formData = {
         ...data,
         assignedEvents: selectedEvents,
       };
 
-      if (onSubmit) {
-        await onSubmit(formData);
-      } else {
-        // Default API call
-        const response = await fetch('/api/admin/invite-organizer', {
+      const response = await fetch('/api/admin/invite-organizer', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(formData),
-        });
+      });
 
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || 'Failed to send invitation');
-        }
-
-        const resJson = await response.json();
-        toast.success('Invitation sent successfully!', {
-          description: `Invitation sent to ${data.email}${resJson.messageId ? ` (messageId: ${resJson.messageId})` : ''}`,
-        });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to create invitation');
       }
+
+      const resJson = await response.json();
+      if (typeof resJson.inviteLink !== 'string' || resJson.inviteLink.length === 0) {
+        throw new Error('Invitation link was not returned');
+      }
+      setInviteLink(resJson.inviteLink);
+      toast.success('Invitation link created');
 
       setInvitationSuccess(true);
       form.reset();
@@ -116,7 +113,7 @@ export function InviteOrganizerForm({
     } catch (error) {
       setInvitationSuccess(false);
       console.error('Invitation failed:', error);
-      toast.error('Failed to send invitation', {
+      toast.error('Failed to create invitation', {
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
     }
@@ -138,11 +135,11 @@ export function InviteOrganizerForm({
           <div className="mb-6">
             <div className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-md bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-900/50 text-green-700 dark:text-green-300 text-xs font-medium mb-3">
               <CheckCircle className="size-3.5" />
-              <span>Invitation Sent</span>
+              <span>Invitation Ready</span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">Invitation Sent Successfully</h1>
+            <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-gray-900 dark:text-gray-100">Invitation Link Created</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400 max-w-prose">
-              The organizer invitation has been sent and they will receive an email with instructions.
+              Copy this link and send it to the organizer through Messenger or another app.
             </p>
           </div>
           
@@ -151,16 +148,33 @@ export function InviteOrganizerForm({
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
                 <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Invitation Delivered</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">Share This Link</h3>
               <p className="text-gray-600 dark:text-gray-400 mb-6">
-                The organizer will receive an email with login instructions and can start managing events once they accept the invitation.
+                The organizer can open this link to set up their account.
               </p>
+              <div className="mb-4 flex gap-2">
+                <Input value={inviteLink} readOnly aria-label="Organizer invitation link" />
+                <Button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(inviteLink);
+                      toast.success('Invitation link copied');
+                    } catch {
+                      toast.error('Could not copy automatically. Select and copy the visible link.');
+                    }
+                  }}
+                >
+                  <Copy className="size-4" />
+                  Copy
+                </Button>
+              </div>
               <Button
                 onClick={() => setInvitationSuccess(false)}
                 variant="outline"
                 className="w-full sm:w-auto"
               >
-                Send Another Invitation
+                Create Another Invitation
               </Button>
             </div>
             <div className="h-0.5 w-full bg-green-400" />
@@ -352,17 +366,17 @@ export function InviteOrganizerForm({
                   {isSubmitting ? (
                     <div className="flex items-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent" />
-                      <span>Sending Invitation...</span>
+                      <span>Creating Invitation...</span>
                     </div>
                   ) : invitationSuccess ? (
                     <div className="flex items-center gap-2">
                       <CheckCircle className="size-4" />
-                      <span>Invitation Sent!</span>
+                      <span>Invitation Ready!</span>
                     </div>
                   ) : (
                     <div className="flex items-center gap-2">
                       <UserPlus className="size-4 group-hover/btn:scale-110 transition-transform" />
-                      <span>Send Invitation</span>
+                      <span>Create Invitation Link</span>
                     </div>
                   )}
                 </Button>
@@ -377,7 +391,7 @@ export function InviteOrganizerForm({
                   </div>
                   <div className="flex items-center gap-1">
                     <CheckCircle className="size-3 text-green-500 dark:text-green-400" />
-                    <span>Email Invitation</span>
+                    <span>Manual Link Sharing</span>
                   </div>
                 </div>
               </div>

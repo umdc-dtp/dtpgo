@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import crypto from 'crypto'
-import { sendOrganizerInvitationEmail } from '@/lib/email/invitation-service'
 import { authenticateAdminApi, createAuthErrorResponse } from '@/lib/auth/api-auth'
 import { prisma } from '@/lib/db/client'
+import { createManualInvitation } from '@/lib/invitations/manual-invitation'
 import { z } from 'zod'
 
 // Validation schema for organizer invitation
@@ -74,76 +74,57 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create organizer record
-    const organizer = await prisma.organizer.create({
-      data: {
-        email,
-        fullName,
-        role,
-        invitedBy: adminUser.id,
-        invitedAt: new Date(),
-      },
-    })
-
-    // Create event assignments if provided
-    if (assignedEvents.length > 0) {
-      await prisma.organizerEventAssignment.createMany({
-        data: assignedEvents.map(eventId => ({
-          organizerId: organizer.id,
-          eventId,
-          assignedBy: adminUser.id,
-        })),
-      })
-    }
-
-    // Log activity
-    await prisma.activity.create({
-      data: {
-        type: 'admin_action',
-        action: 'invite_organizer',
-        description: `Admin ${adminUser.email} invited organizer ${email} with role ${role}`,
-        organizerId: organizer.id,
-        userId: adminUser.id,
-        metadata: {
-          organizerEmail: email,
-          organizerName: fullName,
-          role,
-          assignedEvents,
-        },
-        source: 'admin',
-        category: 'authentication',
-        severity: 'info',
-      },
-    })
-
-    // Generate secure invitation token with expiry (48 hours)
     const token = crypto.randomBytes(32).toString('base64url')
     const invitationExpiresAt = new Date(Date.now() + 1000 * 60 * 60 * 48)
 
-    await prisma.organizer.update({
-      where: { id: organizer.id },
-      data: {
-        invitationToken: token,
-        invitationExpiresAt,
-      },
+    const organizer = await prisma.$transaction(async tx => {
+      const createdOrganizer = await tx.organizer.create({
+        data: {
+          email,
+          fullName,
+          role,
+          invitedBy: adminUser.id,
+          invitedAt: new Date(),
+          invitationToken: token,
+          invitationExpiresAt,
+        },
+      })
+
+      if (assignedEvents.length > 0) {
+        await tx.organizerEventAssignment.createMany({
+          data: assignedEvents.map(eventId => ({
+            organizerId: createdOrganizer.id,
+            eventId,
+            assignedBy: adminUser.id,
+          })),
+        })
+      }
+
+      await tx.activity.create({
+        data: {
+          type: 'admin_action',
+          action: 'invite_organizer',
+          description: `Admin ${adminUser.email} invited organizer ${email} with role ${role}`,
+          organizerId: createdOrganizer.id,
+          userId: adminUser.id,
+          metadata: { organizerEmail: email, organizerName: fullName, role, assignedEvents },
+          source: 'admin',
+          category: 'authentication',
+          severity: 'info',
+        },
+      })
+
+      return createdOrganizer
     })
 
-    // Build invite link to dedicated organizer acceptance flow
-    const origin = request.headers.get('origin') || request.nextUrl.origin
-    const inviteLink = `${origin}/organizer/accept?token=${encodeURIComponent(token)}`
-
-    // Send invitation email
-    const sendResult = await sendOrganizerInvitationEmail({
-      recipientEmail: email,
-      recipientName: fullName,
-      inviteLink,
-    })
+    const origin = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+    const manualInvitation = createManualInvitation(origin, token)
 
     return NextResponse.json(
       {
         success: true,
-        message: 'Organizer invitation sent successfully',
-        messageId: sendResult.messageId,
+        message: 'Organizer invitation link created successfully',
+        ...manualInvitation,
         organizer: {
           id: organizer.id,
           email: organizer.email,
@@ -160,7 +141,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: 'Internal server error',
-        message: 'Failed to send organizer invitation',
+        message: 'Failed to create organizer invitation',
       },
       { status: 500 }
     )

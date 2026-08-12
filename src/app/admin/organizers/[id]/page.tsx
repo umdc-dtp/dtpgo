@@ -21,7 +21,6 @@ import {
   Settings,
   Edit,
   Trash2,
-  RefreshCw,
   Users,
   MapPin
 } from 'lucide-react';
@@ -151,10 +150,6 @@ export default async function OrganizerDetailsPage({ params }: OrganizerDetailsP
           <Button variant="outline" size="sm">
             <Edit className="mr-2 h-4 w-4" />
             Edit Profile
-          </Button>
-          <Button variant="outline" size="sm">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Resend Invitation
           </Button>
           <Button variant="destructive" size="sm">
             <Trash2 className="mr-2 h-4 w-4" />
@@ -341,10 +336,6 @@ export default async function OrganizerDetailsPage({ params }: OrganizerDetailsP
               <Button variant="outline" className="w-full justify-start">
                 <Edit className="mr-2 h-4 w-4" />
                 Edit Profile
-              </Button>
-              <Button variant="outline" className="w-full justify-start">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Resend Invitation
               </Button>
               <Button variant="outline" className="w-full justify-start">
                 <MapPin className="mr-2 h-4 w-4" />

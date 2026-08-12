@@ -75,7 +75,7 @@ export interface OrganizerCardProps extends VariantProps<typeof organizerCardVar
   organizer: Organizer;
   onEdit?: (organizer: Organizer) => void;
   onDeactivate?: (organizer: Organizer) => void;
-  onResendInvitation?: (organizer: Organizer) => void;
+  onResendInvitation?: (organizer: Organizer) => Promise<string>;
   onViewDetails?: (organizer: Organizer) => void;
   showAssignments?: boolean;
   assignmentCount?: number;

@@ -29,40 +29,6 @@ jest.mock('next/image', () => ({
   },
 }))
 
-// Mock environment variables
-process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co'
-process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key'
-
-// Mock Supabase client
-jest.mock('@supabase/ssr', () => ({
-  createBrowserClient: jest.fn(() => ({
-    auth: {
-      getSession: jest.fn(),
-      signInWithPassword: jest.fn(),
-      signUp: jest.fn(),
-      signOut: jest.fn(),
-      resetPasswordForEmail: jest.fn(),
-      updateUser: jest.fn(),
-      getUser: jest.fn(),
-      refreshSession: jest.fn(),
-      onAuthStateChange: jest.fn(() => ({
-        data: { subscription: { unsubscribe: jest.fn() } }
-      })),
-    },
-  })),
-  createServerClient: jest.fn(() => ({
-    auth: {
-      getSession: jest.fn(),
-      getUser: jest.fn(),
-    },
-  })),
-  createMiddlewareClient: jest.fn(() => ({
-    auth: {
-      getSession: jest.fn(),
-    },
-  })),
-}))
-
 // Mock toast notifications
 jest.mock('sonner', () => ({
   toast: {

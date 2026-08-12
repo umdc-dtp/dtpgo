@@ -26,7 +26,6 @@ import {
   RefreshCw,
   UserCheck,
   UserX,
-  Mail,
   MapPin,
   Activity,
   Copy,
@@ -41,7 +40,7 @@ interface OrganizerActionsProps {
   onEdit?: (organizer: Organizer) => void;
   onDeactivate?: (organizer: Organizer) => void;
   onActivate?: (organizer: Organizer) => void;
-  onResendInvitation?: (organizer: Organizer) => void;
+  onResendInvitation?: (organizer: Organizer) => Promise<string>;
   onViewDetails?: (organizer: Organizer) => void;
   onManageAssignments?: (organizer: Organizer) => void;
   onViewActivity?: (organizer: Organizer) => void;
@@ -72,6 +71,7 @@ export function OrganizerActions({
   const [showDeactivateDialog, setShowDeactivateDialog] = useState(false);
   const [showActivateDialog, setShowActivateDialog] = useState(false);
   const [showResendDialog, setShowResendDialog] = useState(false);
+  const [inviteLink, setInviteLink] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   const handleDeactivate = async () => {
@@ -101,12 +101,15 @@ export function OrganizerActions({
   const handleResendInvitation = async () => {
     try {
       setIsLoading(true);
-      await onResendInvitation?.(organizer);
-      setShowResendDialog(false);
-      toast.success(`Invitation resent to ${organizer.fullName}`);
+      if (!onResendInvitation) {
+        throw new Error('Invitation link creation is unavailable')
+      }
+      const newInviteLink = await onResendInvitation(organizer);
+      setInviteLink(newInviteLink);
+      toast.success(`New invitation link created for ${organizer.fullName}`);
     } catch (error) {
-      console.error('Error resending invitation:', error);
-      toast.error('Failed to resend invitation');
+      console.error('Error refreshing invitation link:', error);
+      toast.error('Failed to create invitation link');
     } finally {
       setIsLoading(false);
     }
@@ -251,14 +254,8 @@ export function OrganizerActions({
 
           <DropdownMenuItem onClick={() => setShowResendDialog(true)}>
             <RefreshCw className="mr-2 h-4 w-4" />
-            {showLabels && 'Resend Invitation'}
-            {!showLabels && 'Resend Invite'}
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => window.open(`mailto:${organizer.email}`, '_blank')}>
-            <Mail className="mr-2 h-4 w-4" />
-            {showLabels && 'Send Email'}
-            {!showLabels && 'Email'}
+            {showLabels && 'Create New Invite Link'}
+            {!showLabels && 'New Invite Link'}
           </DropdownMenuItem>
 
           <DropdownMenuSeparator />
@@ -340,28 +337,66 @@ export function OrganizerActions({
       </AlertDialog>
 
       {/* Resend Invitation Confirmation Dialog */}
-      <AlertDialog open={showResendDialog} onOpenChange={setShowResendDialog}>
+      <AlertDialog open={showResendDialog} onOpenChange={(open) => {
+        setShowResendDialog(open);
+        if (!open) setInviteLink('');
+      }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Resend Invitation</AlertDialogTitle>
-            <AlertDialogDescription>
-              Are you sure you want to resend an invitation to <strong>{organizer.fullName}</strong>?
+            <AlertDialogTitle>Create New Invitation Link</AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div>
+              {inviteLink ? (
+                <>
+                  <p className="mb-3">Copy and send this link to <strong>{organizer.fullName}</strong>.</p>
+                  <div className="flex gap-2">
+                    <input
+                      value={inviteLink}
+                      readOnly
+                      aria-label="Organizer invitation link"
+                      className="min-w-0 flex-1 rounded-md border bg-background px-3 py-2 text-sm text-foreground"
+                    />
+                    <Button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(inviteLink);
+                          toast.success('Invitation link copied');
+                        } catch {
+                          toast.error('Could not copy automatically. Select and copy the visible link.');
+                        }
+                      }}
+                    >
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+              Create a new invitation link for <strong>{organizer.fullName}</strong>?
               <br />
               <br />
               Current status: <strong>{getLastLoginStatus()}</strong>
               <br />
               <br />
-              This will send a new invitation email to {organizer.email}.
+              Their previous link will stop working. Copy the new link after it is created.
+                </>
+              )}
+              </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleResendInvitation}
-              disabled={isLoading}
-            >
-              {isLoading ? 'Sending...' : 'Resend Invitation'}
-            </AlertDialogAction>
+            {inviteLink ? (
+              <AlertDialogCancel>Close</AlertDialogCancel>
+            ) : (
+              <>
+                <AlertDialogCancel disabled={isLoading}>Cancel</AlertDialogCancel>
+                <Button type="button" onClick={handleResendInvitation} disabled={isLoading}>
+                  {isLoading ? 'Creating...' : 'Create New Link'}
+                </Button>
+              </>
+            )}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
