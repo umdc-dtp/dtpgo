@@ -93,6 +93,24 @@ export function OrganizerList({ searchQuery = '' }: OrganizerListProps) {
     setPage(newPage);
   };
 
+  const createInvitationLink = async (organizer: Organizer) => {
+    const response = await fetch(`/api/admin/organizers/${organizer.id}/resend-invitation`, {
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || 'Failed to create invitation link');
+    }
+
+    const data = await response.json();
+    if (typeof data.inviteLink !== 'string' || data.inviteLink.length === 0) {
+      throw new Error('Invitation link was not returned');
+    }
+    refetch();
+    return data.inviteLink;
+  };
+
   const getStatusBadge = (organizer: Organizer) => {
     if (!organizer.isActive) {
       return <Badge variant="destructive">Inactive</Badge>;
@@ -363,24 +381,7 @@ export function OrganizerList({ searchQuery = '' }: OrganizerListProps) {
                                 toast.error('Failed to activate organizer');
                               }
                             }}
-                            onResendInvitation={async (org) => {
-                              try {
-                                const res = await fetch(`/api/admin/organizers/${org.id}/resend-invitation`, {
-                                  method: 'POST',
-                                });
-                                if (!res.ok) {
-                                  const err = await res.json().catch(() => ({}));
-                                  throw new Error(err.message || 'Failed to resend invitation');
-                                }
-                                const data = await res.json();
-                                toast.success('Invitation resent successfully', {
-                                  description: `Sent to ${org.email}${data.messageId ? ` (messageId: ${data.messageId})` : ''}`,
-                                });
-                                refetch();
-                              } catch (_e) {
-                                toast.error('Failed to resend invitation');
-                              }
-                            }}
+                            onResendInvitation={createInvitationLink}
                             onViewDetails={(org) => {
                               window.location.href = `/admin/organizers/${org.id}`;
                             }}
@@ -417,10 +418,7 @@ export function OrganizerList({ searchQuery = '' }: OrganizerListProps) {
                       // Handle deactivate action
                       toast.info(`Deactivate organizer: ${org.fullName}`);
                     }}
-                    onResendInvitation={(org) => {
-                      // Handle resend invitation
-                      toast.info(`Resend invitation to: ${org.fullName}`);
-                    }}
+                    onResendInvitation={createInvitationLink}
                     showAssignments={true}
                     assignmentCount={0} // This would come from API in real implementation
                     size="compact"

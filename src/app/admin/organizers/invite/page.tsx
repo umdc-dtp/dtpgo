@@ -11,7 +11,7 @@ export default function InviteOrganizerPage() {
         <CardHeader>
           <CardTitle>Invite Organizer</CardTitle>
           <CardDescription>
-            Send an invitation email to add a new organizer to the system.
+            Create a link to add a new organizer to the system.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -21,5 +21,4 @@ export default function InviteOrganizerPage() {
     </div>
   )
 }
-
 
