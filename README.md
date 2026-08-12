@@ -58,16 +58,16 @@ DTP Go is a comprehensive attendance tracking and student registration system bu
 
 - **Frontend**: Next.js 15 (App Router), React 19, TypeScript 5
 - **Styling**: Tailwind CSS 4, shadcn/ui components, Lucide React icons
-- **Database**: Supabase PostgreSQL with Prisma ORM
-- **Authentication**: Supabase Auth with role-based access control
+- **Database**: Neon PostgreSQL with Prisma ORM
+- **Authentication**: NextAuth.js credentials authentication with role-based access control
 - **QR Code**: qrcode library for generation, html5-qrcode for scanning
-- **Email**: Nodemailer for notifications
+- **Organizer Invitations**: Manually shared, time-limited invitation links
 - **Validation**: Zod schemas for data validation
 
 ## 📋 Prerequisites
 
 - Node.js 18+ and pnpm package manager
-- Supabase account and project setup
+- Neon account and PostgreSQL database
 - PostgreSQL database access
 - Camera access for QR scanning functionality
 
@@ -82,42 +82,27 @@ Create a `.env.local` file in your project root:
 # DATABASE CONFIGURATION
 # =============================================================================
 # PostgreSQL Database Connection String
-# Get this from: Supabase Dashboard > Settings > Database > Connection string > URI
+# Neon pooled connection string for application queries
 DATABASE_URL=
 
 # =============================================================================
-# SUPABASE AUTHENTICATION
+# DATABASE MIGRATIONS
 # =============================================================================
-# Get these from: Supabase Dashboard > Settings > API
+# Neon direct connection string for Prisma schema operations
+DIRECT_URL=
 
-# Your Supabase project URL
-NEXT_PUBLIC_SUPABASE_URL=
-
-# Your Supabase anon/public key
-NEXT_PUBLIC_SUPABASE_ANON_KEY=
-
-# Optional: Supabase service role key (for admin operations)
-SUPABASE_SERVICE_ROLE_KEY=
-
-# =============================================================================
-# EMAIL SERVICE (For future implementation)
-# =============================================================================
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_SECURE=false
-SMTP_USER=
-SMTP_PASS=
-EMAIL_FROM=DTP Go <your@gmail.com>
-EMAIL_REPLY_TO=youremail@gmail.com
+# NextAuth configuration
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=
 
 # =============================================================================
 # APPLICATION CONFIGURATION
 # =============================================================================
-NODE_ENV=development
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_APP_URL=http://localhost:3000
 
-ADMIN_EMAIL=""
-ADMIN_PASSWORD=""
+# Used by `pnpm exec prisma db seed`
+ADMIN_EMAIL=
+ADMIN_PASSWORD=
 ```
 
 ### Installation & Setup
@@ -136,31 +121,16 @@ ADMIN_PASSWORD=""
    pnpm db:migrate
    ```
 
-3. **Create admin user in Supabase**:
-   - Go to your Supabase project dashboard
-   - Navigate to Authentication > Users
-   - Click "Add user" and create an admin account
-   - Note the user's email address
+3. **Create the admin user**:
+   - Set `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `.env.local`
+   - Run `pnpm exec prisma db seed`
 
-4. **Set admin role in Supabase**:
-   - Go to Supabase SQL Editor
-   - Run the following SQL command to set admin role:
-   ```sql
-   UPDATE auth.users 
-   SET raw_user_meta_data = jsonb_set(
-     COALESCE(raw_user_meta_data, '{}'), 
-     '{role}', 
-     '"admin"'
-   ) 
-   WHERE email = 'your-admin-email@example.com';
-   ```
-
-5. **Start development server**:
+4. **Start development server**:
    ```bash
    pnpm dev
    ```
 
-6. **Open your browser**: [http://localhost:3000](http://localhost:3000)
+5. **Open your browser**: [http://localhost:3000](http://localhost:3000)
 
 ## 📖 Basic Usage
 
