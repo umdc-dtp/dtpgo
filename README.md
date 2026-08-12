@@ -52,7 +52,7 @@ DTP Go is a comprehensive attendance tracking and student registration system bu
 - **Dual Registration Workflows**: Admin dashboard and public self-registration
 - **Event & Session Management**: Create events with multiple attendance sessions and time windows
 - **Organizer Management**: Invite and assign organizers to specific events
-- **Role-based Authentication**: Secure Supabase Auth with Admin/Organizer permissions
+- **Role-based Authentication**: Secure NextAuth.js credentials with Admin/Organizer permissions
 
 ## 🛠️ Technology Stack
 
@@ -239,7 +239,7 @@ pnpm test:coverage      # Run tests with coverage
 
 ### Recommended Platform
 - **Vercel**: Optimized for Next.js applications
-- **Database**: Supabase PostgreSQL
+- **Database**: Neon PostgreSQL
 - **Environment**: Set all required environment variables in deployment platform
 
 ### Deployment Steps
