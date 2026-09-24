@@ -21,6 +21,7 @@ export interface StudentWithProgram {
     displayName: string;
   };
 }
+import { invalidateAttendanceStudentLookup } from '@/lib/db/queries/attendance-student-lookup';
 
 /**
  * Create a new student
@@ -55,6 +56,8 @@ export async function createStudent(data: {
         },
       },
     });
+
+    invalidateAttendanceStudentLookup(student.studentIdNumber);
 
     return {
       id: student.id,
@@ -457,8 +460,15 @@ export async function updateStudent(
   }
 ): Promise<ScanningStudent | null> {
   try {
+    const previousStudent = data.studentIdNumber
+      ? await prisma.student.findUnique({
+          where: { id },
+          select: { studentIdNumber: true },
+        })
+      : null;
+
     const student = await prisma.student.update({
-    where: { id },
+      where: { id },
       data: {
         ...(data.studentIdNumber && { studentIdNumber: data.studentIdNumber }),
         ...(data.firstName && { firstName: data.firstName }),
@@ -467,16 +477,20 @@ export async function updateStudent(
         ...(data.year && { year: data.year }),
         ...(data.programId && { programId: data.programId }),
       },
-    include: {
+      include: {
         program: {
           select: {
             name: true,
             displayName: true,
           },
         },
-    },
-  });
+      },
+    });
 
+    if (previousStudent) {
+      invalidateAttendanceStudentLookup(previousStudent.studentIdNumber);
+    }
+    invalidateAttendanceStudentLookup(student.studentIdNumber);
     return {
       id: student.id,
       studentId: student.studentIdNumber,
@@ -484,9 +498,8 @@ export async function updateStudent(
       email: student.email,
       program: student.program.name,
       year: student.year,
-      isActive: true, // Placeholder - assume active
+      isActive: true,
     };
-
   } catch (error) {
     console.error('Error updating student:', error);
     return null;
@@ -498,9 +511,11 @@ export async function updateStudent(
  */
 export async function deleteStudent(id: string): Promise<boolean> {
   try {
-  await prisma.student.delete({
-    where: { id },
-  });
+    const student = await prisma.student.delete({
+      where: { id },
+      select: { studentIdNumber: true },
+    });
+    invalidateAttendanceStudentLookup(student.studentIdNumber);
     return true;
 
   } catch (error) {

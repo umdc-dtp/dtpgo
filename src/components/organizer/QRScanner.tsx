@@ -5,7 +5,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
-import { Camera, X, CheckCircle, User, Hash, Zap, Scan, Sparkles, AlertCircle } from 'lucide-react';
+import { Camera, X, CheckCircle, User, Hash, Zap, Scan, Sparkles, AlertCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface QRScannerProps {
@@ -43,6 +43,7 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
   const successAudioRef = useRef<HTMLAudioElement | null>(null);
   const dialogTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isCleaningUpRef = useRef(false);
+  const isProcessingRef = useRef(false);
 
   // Initialize success sound
   useEffect(() => {
@@ -215,11 +216,12 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
         async (decodedText) => {
           // Debounce scans
           const now = Date.now();
-          if (now - lastScanTimeRef.current < 2000) {
+          if (isProcessingRef.current || now - lastScanTimeRef.current < 2000) {
             console.log('⏳ Debouncing scan...');
             return;
           }
           lastScanTimeRef.current = now;
+          isProcessingRef.current = true;
 
           console.log('✅ QR Code detected:', decodedText);
           setScanAnimation(true);
@@ -266,6 +268,11 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
                   finalResult = updatedData;
                 });
                 console.log('✅ onScan callback completed successfully');
+
+                if (!finalResult) {
+                  throw new Error('Attendance response did not confirm a result');
+                }
+                const confirmedResult = finalResult as Partial<ScanResult>;
                 
                 // Now update with the final result
                 if (finalResult) {
@@ -302,7 +309,7 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
             }, 3000);
 
               // Play success sound
-              if (successAudioRef.current) {
+              if (successAudioRef.current && !confirmedResult.isError && !confirmedResult.isDuplicate) {
                 successAudioRef.current.currentTime = 0;
                 successAudioRef.current.play().catch(err => console.warn('Could not play sound:', err));
               }
@@ -344,6 +351,7 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
             });
           } finally {
             setIsProcessing(false);
+            isProcessingRef.current = false;
             console.log('🔄 Processing state reset to false');
           }
         },
@@ -499,7 +507,7 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
     <div className="space-y-4">
       {/* Success Result Dialog - Celebratory Popup */}
       <Dialog open={showResultDialog} onOpenChange={setShowResultDialog}>
-        <DialogContent className="sm:max-w-md border-0 bg-transparent shadow-none p-0" showCloseButton={false}>
+        <DialogContent className="max-h-[calc(100dvh-2rem)] overflow-y-auto border-0 bg-transparent p-0 shadow-none sm:max-w-md" showCloseButton={false}>
           {/* Screen reader only title for accessibility */}
           <DialogTitle className="sr-only">
             {lastScanResult?.isError 
@@ -509,11 +517,13 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
                 : 'Successful Scan Result'}
           </DialogTitle>
           
-          <div className={`relative overflow-hidden rounded-3xl backdrop-blur-xl border-2 ${
+          <div className={`relative max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden rounded-3xl backdrop-blur-xl border-2 ${
             lastScanResult?.isError
               ? 'bg-gradient-to-br from-red-500/30 to-red-600/30 border-red-500/50'
               : lastScanResult?.isDuplicate 
               ? 'bg-gradient-to-br from-amber-500/30 to-orange-500/30 border-amber-500/50' 
+              : isProcessing
+              ? 'bg-gradient-to-br from-blue-500/30 to-cyan-500/30 border-blue-500/50'
               : 'bg-gradient-to-br from-emerald-500/30 to-green-500/30 border-emerald-500/50'
           } shadow-2xl ${
             lastScanResult?.isError 
@@ -565,7 +575,9 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
                     ? 'bg-gradient-to-br from-amber-500 to-orange-500' 
                     : 'bg-gradient-to-br from-emerald-500 to-green-500'
                 }`}>
-                  {lastScanResult?.isError ? (
+                  {isProcessing ? (
+                    <Loader2 className="h-16 w-16 animate-spin text-white" />
+                  ) : lastScanResult?.isError ? (
                     <X className="h-16 w-16 text-white" />
                   ) : lastScanResult?.isDuplicate ? (
                     <Zap className="h-16 w-16 text-white" />
@@ -581,16 +593,22 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
                   lastScanResult?.isError 
                     ? 'text-red-100' 
                     : lastScanResult?.isDuplicate 
-                      ? 'text-amber-100' 
+                      ? 'text-amber-100'
                       : 'text-emerald-100'
                 }`}>
-                  {lastScanResult?.isError 
-                    ? 'Error!' 
+                  {isProcessing
+                    ? 'Processing...'
+                    : lastScanResult?.isError
+                    ? 'Error!'
                     : lastScanResult?.isDuplicate 
                       ? 'Already Recorded!' 
                       : 'Success!'}
                 </h2>
-                {lastScanResult?.isError ? (
+                {isProcessing ? (
+                  <div className="flex items-center justify-center gap-2 text-blue-100">
+                    <span className="text-sm">Verifying attendance...</span>
+                  </div>
+                ) : lastScanResult?.isError ? (
                   <div className="flex items-center justify-center gap-2 text-red-200/80">
                     <AlertCircle className="h-4 w-4" />
                     <span className="text-sm">Scan Failed</span>

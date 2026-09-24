@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { authenticateOrganizerRequest } from '@/lib/auth/organizer-auth';
 import { prisma } from '@/lib/db/client';
 import { logSystemEvent } from '@/lib/db/queries/activity';
+import { getAttendanceStudentByStudentId } from '@/lib/db/queries/attendance-student-lookup';
 import { z } from 'zod';
 
 // Validation schema for attendance recording
@@ -163,16 +164,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify student exists (search by student ID number, not database ID)
-    const student = await prisma.student.findUnique({
-      where: { studentIdNumber: studentId },
-      include: {
-        program: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    });
+    const student = await getAttendanceStudentByStudentId(studentId);
 
     if (!student) {
       await logSystemEvent(
@@ -326,40 +318,58 @@ export async function POST(request: NextRequest) {
     // Create or update attendance record
     // For time_in: Create new record
     // For time_out: Update existing record with timeOut timestamp
-    let attendance;
-    
-    if (scanType === 'time_in') {
-      // Create new attendance record for time-in
-      attendance = await prisma.attendance.create({
-        data: {
+    const attendance = await prisma.$transaction(async (transaction) => {
+      const latestRecord = await transaction.attendance.findFirst({
+        where: {
           studentId: student.id,
-          eventId: session.event.id,
           sessionId,
-          scanType: 'time_in',
-          scannedBy: organizer.id,
-          timeIn: new Date(),
-          timeOut: null,
-          ipAddress,
-          userAgent,
         },
+        orderBy: { createdAt: 'desc' },
       });
-    } else if (existingRecord) {
-      // Update existing record for time-out
-      // existingRecord is guaranteed to exist here due to validation above
-      attendance = await prisma.attendance.update({
-        where: { id: existingRecord.id },
-        data: {
-          timeOut: new Date(),
-          scanType: 'time_out', // Update scanType to reflect the latest action
-          scannedBy: organizer.id,
-          ipAddress,
-          userAgent,
-        },
-      });
-    } else {
-      // This should never happen due to validation above
+
+      if (scanType === 'time_in' && latestRecord?.timeIn) {
+        const duplicateError = new Error('Attendance already recorded');
+        duplicateError.name = 'AttendanceConflict';
+        throw duplicateError;
+      }
+
+      if (scanType === 'time_out' && latestRecord?.timeOut) {
+        const duplicateError = new Error('Attendance already recorded');
+        duplicateError.name = 'AttendanceConflict';
+        throw duplicateError;
+      }
+
+      if (scanType === 'time_in') {
+        return transaction.attendance.create({
+          data: {
+            studentId: student.id,
+            eventId: session.event.id,
+            sessionId,
+            scanType: 'time_in',
+            scannedBy: organizer.id,
+            timeIn: new Date(),
+            timeOut: null,
+            ipAddress,
+            userAgent,
+          },
+        });
+      }
+
+      if (latestRecord) {
+        return transaction.attendance.update({
+          where: { id: latestRecord.id },
+          data: {
+            timeOut: new Date(),
+            scanType: 'time_out',
+            scannedBy: organizer.id,
+            ipAddress,
+            userAgent,
+          },
+        });
+      }
+
       throw new Error('Invalid state: existingRecord is null for time_out scan');
-    }
+    });
 
     const processingDuration = Date.now() - startTime;
 
@@ -415,6 +425,16 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     const processingDuration = Date.now() - startTime;
+
+    if (error instanceof Error && error.name === 'AttendanceConflict') {
+      return NextResponse.json(
+        {
+          error: 'Attendance already recorded',
+          message: 'Attendance has already been recorded for this student in this session',
+        },
+        { status: 409 }
+      );
+    }
     
     // Log attendance recording failure
     await logSystemEvent(

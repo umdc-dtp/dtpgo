@@ -60,6 +60,10 @@ export function ManualInput({ onScan }: ManualInputProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isProcessing) {
+      return;
+    }
     
     if (!studentIdNumber.trim()) {
       toast.error('Please enter a student ID number');
@@ -89,6 +93,10 @@ export function ManualInput({ onScan }: ManualInputProps) {
       });
 
       console.log('✅ Manual input processed successfully');
+
+      if (!finalResult) {
+        throw new Error('Attendance response did not confirm a result');
+      }
       
       // Update with the final result
       if (finalResult) {
@@ -176,11 +184,13 @@ export function ManualInput({ onScan }: ManualInputProps) {
         showResultDialog ? 'block' : 'hidden'
       }`}>
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowResultDialog(false)} />
-        <div className={`relative overflow-hidden rounded-3xl backdrop-blur-xl border-2 ${
+        <div className={`relative max-h-[calc(100dvh-2rem)] overflow-y-auto overflow-x-hidden rounded-3xl backdrop-blur-xl border-2 ${
           lastScanResult?.isError
             ? 'bg-gradient-to-br from-red-500/30 to-red-600/30 border-red-500/50'
             : lastScanResult?.isDuplicate 
             ? 'bg-gradient-to-br from-amber-500/30 to-orange-500/30 border-amber-500/50' 
+            : isProcessing
+            ? 'bg-gradient-to-br from-blue-500/30 to-cyan-500/30 border-blue-500/50'
             : 'bg-gradient-to-br from-emerald-500/30 to-green-500/30 border-emerald-500/50'
         } shadow-2xl ${
           lastScanResult?.isError 
@@ -232,7 +242,9 @@ export function ManualInput({ onScan }: ManualInputProps) {
                   ? 'bg-gradient-to-br from-amber-500 to-orange-500' 
                   : 'bg-gradient-to-br from-emerald-500 to-green-500'
               }`}>
-                {lastScanResult?.isError ? (
+                {isProcessing ? (
+                  <Loader2 className="h-16 w-16 animate-spin text-white" />
+                ) : lastScanResult?.isError ? (
                   <AlertCircle className="h-16 w-16 text-white" />
                 ) : lastScanResult?.isDuplicate ? (
                   <CheckCircle className="h-16 w-16 text-white" />
@@ -251,13 +263,19 @@ export function ManualInput({ onScan }: ManualInputProps) {
                     ? 'text-amber-100' 
                     : 'text-emerald-100'
               }`}>
-                {lastScanResult?.isError 
-                  ? 'Error!' 
+                {isProcessing
+                  ? 'Processing...'
+                  : lastScanResult?.isError
+                  ? 'Error!'
                   : lastScanResult?.isDuplicate 
                     ? 'Already Recorded!' 
                     : 'Success!'}
               </h2>
-              {lastScanResult?.isError ? (
+                {isProcessing ? (
+                  <div className="flex items-center justify-center gap-2 text-blue-100">
+                    <span className="text-sm">Verifying attendance...</span>
+                  </div>
+                ) : lastScanResult?.isError ? (
                 <div className="flex items-center justify-center gap-2 text-red-200/80">
                   <AlertCircle className="h-4 w-4" />
                   <span className="text-sm">Input Failed</span>
