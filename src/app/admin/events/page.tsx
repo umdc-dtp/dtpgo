@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 
 export default function AdminEventsPage() {
   return (
-    <div className="w-full max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6 min-w-[800px]">
+    <div className="w-full min-w-0 max-w-[2000px] mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>

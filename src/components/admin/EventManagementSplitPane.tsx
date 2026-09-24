@@ -343,8 +343,10 @@ export function EventManagementSplitPane() {
       if (data.success) {
         eventFeedback.delete.success(selectedEvent.name, String(toastId));
         setIsDeleteOpen(false);
+        const deletedEventId = selectedEvent.id;
         setSelectedEvent(null);
-        await fetchEvents();
+        await fetchEvents({ suppressLoading: true });
+        setEvents((currentEvents) => currentEvents.filter((event) => event.id !== deletedEventId));
       } else {
         // Check if it's a warning (attendance records exist)
         if (response.status === 400 && data.error?.includes('attendance records')) {
@@ -637,7 +639,7 @@ export function EventManagementSplitPane() {
         )}
       </div>
       <div className="p-3 border-t bg-white dark:bg-gray-900 dark:border-gray-800">
-        <Button className="w-full" onClick={() => setIsCreateOpen(true)}>
+        <Button type="button" className="w-full" onClick={() => setIsCreateOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Create Event
         </Button>
@@ -704,12 +706,14 @@ export function EventManagementSplitPane() {
 
       {/* Create Event Dialog */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="flex max-h-[calc(100dvh-1rem)] flex-col overflow-hidden max-w-2xl sm:max-h-[calc(100dvh-2rem)]">
           <DialogHeader>
             <DialogTitle>Create New Event</DialogTitle>
             <DialogDescription>Create a new event with sessions and organizer assignments.</DialogDescription>
           </DialogHeader>
-          <EventForm onSubmit={handleCreateEvent} onCancel={() => setIsCreateOpen(false)} />
+          <div className="min-h-0 overflow-y-auto overscroll-contain pr-1">
+            <EventForm onSubmit={handleCreateEvent} onCancel={() => setIsCreateOpen(false)} />
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -740,10 +744,10 @@ export function EventManagementSplitPane() {
             </DialogDescription>
           </DialogHeader>
           <div className="flex justify-end gap-3 pt-4">
-            <Button variant="outline" onClick={() => setIsDeleteOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setIsDeleteOpen(false)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteEventConfirm}>
+            <Button type="button" variant="destructive" onClick={handleDeleteEventConfirm}>
               Delete Event
             </Button>
           </div>

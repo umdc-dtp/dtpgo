@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db/client';
 import { logSystemEvent } from '@/lib/db/queries/activity';
 import { getAttendanceStudentByStudentId } from '@/lib/db/queries/attendance-student-lookup';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 
 // Validation schema for attendance recording
 const recordAttendanceSchema = z.object({
@@ -79,19 +80,30 @@ export async function POST(request: NextRequest) {
       originalBody: body
     });
 
-    // Verify session exists and organizer has access
-    const session = await prisma.session.findUnique({
-      where: { id: sessionId },
-      include: {
-        event: {
-          select: {
-            id: true,
-            name: true,
-            isActive: true,
+    // Resolve the session and student concurrently. The access assignment is
+    // checked as part of the session query to avoid a separate round trip.
+    const [session, student] = await Promise.all([
+      prisma.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          event: {
+            select: {
+              id: true,
+              name: true,
+              isActive: true,
+              organizerAssignments: {
+                where: {
+                  organizerId: organizer.id,
+                  isActive: true,
+                },
+                select: { id: true },
+              },
+            },
           },
         },
-      },
-    });
+      }),
+      getAttendanceStudentByStudentId(studentId),
+    ]);
 
     if (!session) {
       await logSystemEvent(
@@ -134,15 +146,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Event is not active' }, { status: 400 });
     }
 
-    // Check if organizer has access to this event
-    const hasAccess = await prisma.organizerEventAssignment.findFirst({
-      where: {
-        organizerId: organizer.id,
-        eventId: session.event.id,
-      },
-    });
-
-    if (!hasAccess) {
+    // Check the assignment returned with the session query.
+    if (session.event.organizerAssignments.length === 0) {
       await logSystemEvent(
         'attendance_recording_failed',
         `Attendance recording failed: Organizer not assigned to event (Organizer: ${organizer.id}, Event: ${session.event.id})`,
@@ -164,8 +169,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify student exists (search by student ID number, not database ID)
-    const student = await getAttendanceStudentByStudentId(studentId);
-
     if (!student) {
       await logSystemEvent(
         'attendance_recording_failed',
@@ -427,6 +430,18 @@ export async function POST(request: NextRequest) {
     const processingDuration = Date.now() - startTime;
 
     if (error instanceof Error && error.name === 'AttendanceConflict') {
+      return NextResponse.json(
+        {
+          error: 'Attendance already recorded',
+          message: 'Attendance has already been recorded for this student in this session',
+        },
+        { status: 409 }
+      );
+    }
+
+    // A concurrent time-in can win the unique constraint after both requests
+    // pass the read checks. Treat that race as an expected duplicate.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
       return NextResponse.json(
         {
           error: 'Attendance already recorded',

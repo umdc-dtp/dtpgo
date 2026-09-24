@@ -280,17 +280,19 @@ export function EventManagement({ className }: EventManagementProps) {
                   Create Event
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="flex max-h-[calc(100dvh-1rem)] flex-col overflow-hidden max-w-2xl sm:max-h-[calc(100dvh-2rem)]">
                 <DialogHeader>
                   <DialogTitle>Create New Event</DialogTitle>
                   <DialogDescription>
                     Create a new event with sessions and organizer assignments.
                   </DialogDescription>
                 </DialogHeader>
-                <EventForm
-                  onSubmit={handleCreateEvent}
-                  onCancel={() => setIsCreateDialogOpen(false)}
-                />
+                <div className="min-h-0 overflow-y-auto overscroll-contain pr-1">
+                  <EventForm
+                    onSubmit={handleCreateEvent}
+                    onCancel={() => setIsCreateDialogOpen(false)}
+                  />
+                </div>
               </DialogContent>
             </Dialog>
           </div>

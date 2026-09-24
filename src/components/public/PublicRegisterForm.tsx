@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useDebounce } from '@/hooks/use-debounce';
-import { User, Mail, GraduationCap, Calendar, CheckCircle, Zap, AlertCircle } from 'lucide-react';
+import Link from 'next/link';
+import { User, Mail, GraduationCap, Calendar, CheckCircle, Zap, AlertCircle, QrCode } from 'lucide-react';
 
 interface Program {
   id: string;
@@ -439,6 +440,16 @@ export const PublicRegisterForm = ({ onSubmit, isSubmitting }: PublicRegisterFor
                   </div>
                 )}
               </Button>
+            </div>
+
+            <div className="text-center">
+              <Link
+                href="/join/qr-code"
+                className="inline-flex items-center gap-2 text-sm font-semibold text-amber-700 transition-colors hover:text-amber-800 hover:underline dark:text-amber-300 dark:hover:text-amber-200"
+              >
+                <QrCode className="size-4" />
+                Already Registered? Get My QR Code
+              </Link>
             </div>
 
             {/* Trust Indicators */}

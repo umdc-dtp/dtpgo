@@ -106,13 +106,13 @@ export function EventsList({
               </div>
             </div>
             <div className="flex items-center gap-1">
-              <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onViewDetails(event); }} className="h-8 w-8">
+              <Button type="button" variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onViewDetails(event); }} className="h-8 w-8">
                 <Eye className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onEditEvent(event); }} className="h-8 w-8">
+              <Button type="button" variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onEditEvent(event); }} className="h-8 w-8">
                 <Edit className="h-4 w-4" />
               </Button>
-              <Button variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onDeleteEvent(event); }} className="h-8 w-8 text-red-600 hover:text-red-700">
+              <Button type="button" variant="outline" size="icon" onClick={(e) => { e.stopPropagation(); onDeleteEvent(event); }} className="h-8 w-8 text-red-600 hover:text-red-700">
                 <Trash2 className="h-4 w-4" />
               </Button>
             </div>

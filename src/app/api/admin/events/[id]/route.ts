@@ -415,28 +415,33 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
       );
     }
 
-    // Soft delete by setting isActive to false instead of hard delete
-    const deletedEvent = await prisma.event.update({
+    // Permanently delete events without attendance records. Related sessions
+    // and organizer assignments cascade, while activity logs are retained.
+    const deletedEvent = await prisma.event.delete({
       where: { id },
-      data: { isActive: false },
     });
 
-    await logActivity({
-      type: 'admin_action',
-      action: 'event_deleted',
-      description: `Admin ${adminUser.email} deleted event: ${existingEvent.name}`,
-      severity: 'info',
-      category: 'data_management',
-      metadata: {
-        eventId: id,
-        eventName: existingEvent.name,
-        sessionsCount: existingEvent._count.sessions,
-        deletionDuration: Date.now() - startTime,
-        ipAddress,
-        userAgent,
-      },
-      userId: adminUser.id,
-    });
+    try {
+      await logActivity({
+        type: 'admin_action',
+        action: 'event_deleted',
+        description: `Admin ${adminUser.email} deleted event: ${existingEvent.name}`,
+        severity: 'info',
+        category: 'data_management',
+        metadata: {
+          eventId: id,
+          eventName: existingEvent.name,
+          sessionsCount: existingEvent._count.sessions,
+          deletionDuration: Date.now() - startTime,
+          ipAddress,
+          userAgent,
+        },
+        userId: adminUser.id,
+      });
+    } catch (activityError) {
+      // Deletion has already succeeded; activity logging must not turn it into a false error.
+      console.error('Failed to log event deletion activity:', activityError);
+    }
 
     return NextResponse.json({
       success: true,

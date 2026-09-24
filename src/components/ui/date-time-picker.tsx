@@ -111,7 +111,14 @@ export function DateTimePicker({
               </div>
             </Button>
           </PopoverTrigger>
-          <PopoverContent className="z-50 w-auto p-0" align="start" side="bottom" sideOffset={8}>
+          <PopoverContent
+            className="z-50 max-h-[var(--radix-popover-content-available-height)] w-[min(22rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] overflow-y-auto p-0"
+            align="start"
+            side="bottom"
+            sideOffset={8}
+            avoidCollisions
+            collisionPadding={8}
+          >
             <div className="p-4">
               <div className="space-y-4">
                 <div>

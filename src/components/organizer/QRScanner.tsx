@@ -39,11 +39,11 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
   const [isStopping, setIsStopping] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isMountedRef = useRef(true);
-  const lastScanTimeRef = useRef<number>(0);
   const successAudioRef = useRef<HTMLAudioElement | null>(null);
   const dialogTimerRef = useRef<NodeJS.Timeout | null>(null);
   const isCleaningUpRef = useRef(false);
-  const isProcessingRef = useRef(false);
+  const scanStateRef = useRef(new Map<string, { processing: boolean; lastProcessedAt: number }>());
+  const activeScanCountRef = useRef(0);
 
   // Initialize success sound
   useEffect(() => {
@@ -111,7 +111,8 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
     setShowResultDialog(false);
     setLastScanResult(null);
     setIsStopping(false);
-    lastScanTimeRef.current = 0;
+    scanStateRef.current.clear();
+    activeScanCountRef.current = 0;
     
     // Clear any existing scanner instance
     if (scannerRef.current) {
@@ -214,14 +215,17 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
           },
         },
         async (decodedText) => {
-          // Debounce scans
+          // Deduplicate each QR independently so different students can scan concurrently.
+          const scanKey = decodedText.trim();
+          if (!scanKey) return;
           const now = Date.now();
-          if (isProcessingRef.current || now - lastScanTimeRef.current < 2000) {
+          const scanState = scanStateRef.current.get(scanKey);
+          if (scanState?.processing || (scanState && now - scanState.lastProcessedAt < 2000)) {
             console.log('⏳ Debouncing scan...');
             return;
           }
-          lastScanTimeRef.current = now;
-          isProcessingRef.current = true;
+          scanStateRef.current.set(scanKey, { processing: true, lastProcessedAt: now });
+          activeScanCountRef.current += 1;
 
           console.log('✅ QR Code detected:', decodedText);
           setScanAnimation(true);
@@ -350,8 +354,12 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
               description: err instanceof Error ? err.message : 'Failed to process QR code'
             });
           } finally {
-            setIsProcessing(false);
-            isProcessingRef.current = false;
+            const currentScanState = scanStateRef.current.get(scanKey);
+            if (currentScanState) {
+              scanStateRef.current.set(scanKey, { ...currentScanState, processing: false });
+            }
+            activeScanCountRef.current = Math.max(0, activeScanCountRef.current - 1);
+            setIsProcessing(activeScanCountRef.current > 0);
             console.log('🔄 Processing state reset to false');
           }
         },
@@ -371,7 +379,7 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
       toast.error(errorMsg);
       onError?.(errorMsg);
     }
-  }, [cameraId, onScan, onError, onScanningStateChange]);
+  }, [cameraId, isMobile, onScan, onError, onScanningStateChange]);
 
   const stopScanning = useCallback(async () => {
     console.log('🛑 Stop scanner called, isScanning:', isScanning, 'scannerRef exists:', !!scannerRef.current);
@@ -450,6 +458,8 @@ export function QRScanner({ onScan, onError, onCleanup, onScanningStateChange }:
       // Reset state
       setIsScanning(false);
       setIsProcessing(false);
+      scanStateRef.current.clear();
+      activeScanCountRef.current = 0;
       setScanAnimation(false);
       setShowResultDialog(false);
       setLastScanResult(null);

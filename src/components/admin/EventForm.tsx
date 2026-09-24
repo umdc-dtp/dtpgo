@@ -156,7 +156,7 @@ export function EventForm({ event, onSubmit, onCancel }: EventFormProps) {
   };
 
   return (
-    <form onSubmit={handleFormSubmit} className="space-y-6">
+    <form onSubmit={handleFormSubmit} className="min-w-0 space-y-6">
       {/* Event Name */}
       <div className="space-y-2">
         <Label htmlFor="name">Event Name *</Label>
@@ -318,7 +318,7 @@ export function EventForm({ event, onSubmit, onCancel }: EventFormProps) {
       )}
 
       {/* Form Actions */}
-      <div className="flex items-center justify-end space-x-3 pt-4 border-t dark:border-gray-700">
+      <div className="flex flex-col-reverse items-stretch gap-3 pt-4 border-t dark:border-gray-700 sm:flex-row sm:items-center sm:justify-end sm:space-x-3 sm:gap-0">
         <Button
           type="button"
           variant="outline"

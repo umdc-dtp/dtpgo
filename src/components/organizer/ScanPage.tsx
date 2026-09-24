@@ -463,9 +463,6 @@ export function ScanPage() {
                       console.error('❌ No student ID found');
                       console.error('❌ studentId value:', studentId);
                       console.error('❌ studentId type:', typeof studentId);
-                      toast.error('Invalid QR Code', {
-                        description: 'No student ID found in QR code'
-                      });
                       throw new Error('No student ID found in QR code');
                     }
 
@@ -620,14 +617,10 @@ export function ScanPage() {
                   } catch (error) {
                     console.error('❌ Error recording attendance:', error);
                     console.error('❌ Error stack:', error instanceof Error ? error.stack : 'No stack trace');
-                    const errorMsg = error instanceof Error ? error.message : 'Failed to record attendance';
                     
                     // Dismiss processing toast
                     toast.dismiss('scan-processing');
                     
-                    toast.error('Recording Failed', {
-                      description: errorMsg
-                    });
                     throw error; // Re-throw so the scanner can handle it
                   }
                 }}
