@@ -2,18 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createBrandedQRCode } from '@/lib/qr/branding';
 import { prisma } from '@/lib/db/client';
 import { withRateLimit } from '@/lib/auth/rate-limit';
+import { namesMatch, normalizeNameParts } from '@/lib/student-name-matching';
 
 const normalize = (value: string) => value.trim().replace(/\s+/g, ' ');
-const normalizeName = (value: string) => normalize(value)
-  .replace(/[^a-z0-9 ]/gi, '')
-  .toLowerCase();
 
 export const POST = withRateLimit('api', async (request: NextRequest) => {
   try {
     const body = await request.json();
     const name = typeof body?.name === 'string' ? normalize(body.name) : '';
     const studentIdNumber = typeof body?.studentIdNumber === 'string'
-      ? body.studentIdNumber.trim().replace(/\s+/g, '')
+      ? body.studentIdNumber.trim()
       : '';
 
     if (!name || !studentIdNumber) {
@@ -30,16 +28,15 @@ export const POST = withRateLimit('api', async (request: NextRequest) => {
       );
     }
 
-    if (name.split(' ').length < 2) {
+    if (normalizeNameParts(name).length < 2) {
       return NextResponse.json(
         { error: 'Please enter your first and last name.' },
         { status: 400 }
       );
     }
 
-    // Find the ID candidate first, then verify the submitted name server-side.
-    // This handles legacy records with extra spaces or punctuation in names.
-    const candidate = await prisma.student.findUnique({
+    // Use the exact ID as the database lookup key, then verify the submitted name.
+    const candidates = await prisma.student.findMany({
       where: {
         studentIdNumber,
       },
@@ -50,8 +47,11 @@ export const POST = withRateLimit('api', async (request: NextRequest) => {
       },
     });
 
-    const student = candidate && normalizeName(`${candidate.firstName} ${candidate.lastName}`) === normalizeName(name)
-      ? candidate
+    const student = candidates.length === 1 && namesMatch(
+      `${candidates[0].firstName} ${candidates[0].lastName}`,
+      name
+    )
+      ? candidates[0]
       : null;
 
     if (!student) {
