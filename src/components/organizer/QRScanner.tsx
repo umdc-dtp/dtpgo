@@ -146,7 +146,7 @@ export function QRScanner({ onCapture, onScanningStateChange, onCleanup }: QRSca
       if (runIdRef.current !== runId) return;
 
       let fallbackStarted = false;
-      const useSingleCodeFallback = async () => {
+      const startSingleCodeFallback = async () => {
         if (fallbackStarted || runIdRef.current !== runId) return;
         fallbackStarted = true;
         workerRef.current?.terminate();
@@ -178,7 +178,7 @@ export function QRScanner({ onCapture, onScanningStateChange, onCleanup }: QRSca
 
       const canvas = document.createElement('canvas');
       const context = canvas.getContext('2d', { willReadFrequently: true });
-      if (!context) { void useSingleCodeFallback(); }
+      if (!context) { void startSingleCodeFallback(); }
 
       const scanFrame = () => {
         if (runIdRef.current !== runId || fallbackStarted || !context) return;
@@ -196,7 +196,7 @@ export function QRScanner({ onCapture, onScanningStateChange, onCleanup }: QRSca
         try {
           workerRef.current?.postMessage({ frame }, [frame.data.buffer]);
         } catch {
-          void useSingleCodeFallback();
+          void startSingleCodeFallback();
         }
       };
       if (context) {
@@ -205,14 +205,14 @@ export function QRScanner({ onCapture, onScanningStateChange, onCleanup }: QRSca
           workerRef.current = worker;
           worker.onmessage = (event: MessageEvent<{ values?: string[]; error?: string }>) => {
             if (runIdRef.current !== runId || fallbackStarted) return;
-            if (event.data.error) { void useSingleCodeFallback(); return; }
+            if (event.data.error) { void startSingleCodeFallback(); return; }
             setDetectedCount(event.data.values?.length || 0);
             for (const value of event.data.values || []) capture(value);
             timerRef.current = window.setTimeout(scanFrame, 120);
           };
-          worker.onerror = () => { void useSingleCodeFallback(); };
+          worker.onerror = () => { void startSingleCodeFallback(); };
         } catch {
-          void useSingleCodeFallback();
+          void startSingleCodeFallback();
         }
       }
       setScanning(true);
