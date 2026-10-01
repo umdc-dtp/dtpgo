@@ -10,8 +10,8 @@ interface StudentInfo {
 export async function createBrandedQRCode(studentInfo: StudentInfo): Promise<Buffer> {
   try {
     const qrCodeDataUrl = await generateQRCodeDataURL(studentInfo.studentId, {
-      width: 240,
-      margin: 2,
+      width: 260,
+      margin: 4,
     });
     const qrCodeBuffer = Buffer.from(qrCodeDataUrl.split(',')[1], 'base64');
 
@@ -35,7 +35,7 @@ export async function createBrandedQRCode(studentInfo: StudentInfo): Promise<Buf
     return canvas
       .composite([
         { input: logoBuffer, top: 20, left: 120 }, // DTP logo at top center
-        { input: qrCodeBuffer, top: 120, left: 40 }, // QR code below logo
+        { input: qrCodeBuffer, top: 110, left: 30 }, // QR code below logo
       ])
       .png()
       .toBuffer();

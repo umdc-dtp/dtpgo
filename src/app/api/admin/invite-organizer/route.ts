@@ -4,6 +4,7 @@ import { authenticateAdminApi, createAuthErrorResponse } from '@/lib/auth/api-au
 import { prisma } from '@/lib/db/client'
 import { createManualInvitation } from '@/lib/invitations/manual-invitation'
 import { z } from 'zod'
+import { Prisma } from '@prisma/client'
 
 // Validation schema for organizer invitation
 const inviteOrganizerSchema = z.object({
@@ -44,13 +45,35 @@ export async function POST(request: NextRequest) {
     })
 
     if (existingOrganizer) {
-      return NextResponse.json(
-        {
-          error: 'Organizer already exists',
-          message: 'An organizer with this email address already exists.',
-        },
-        { status: 409 }
-      )
+      const existingUser = await prisma.user.findUnique({ where: { email: email.toLowerCase() }, select: { id: true } })
+      if (existingUser) {
+        return NextResponse.json(
+          { error: 'Organizer already registered', message: 'This organizer already has an account.' },
+          { status: 409 }
+        )
+      }
+
+      const origin = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
+      if (existingOrganizer.invitationToken && existingOrganizer.invitationExpiresAt && existingOrganizer.invitationExpiresAt > new Date()) {
+        return NextResponse.json({
+          success: true,
+          message: 'Existing invitation link is ready to share',
+          ...createManualInvitation(origin, existingOrganizer.invitationToken),
+          organizer: { id: existingOrganizer.id, email: existingOrganizer.email, fullName: existingOrganizer.fullName, role: existingOrganizer.role, invitedAt: existingOrganizer.invitedAt },
+        })
+      }
+
+      const token = crypto.randomBytes(32).toString('base64url')
+      const refreshedOrganizer = await prisma.organizer.update({
+        where: { id: existingOrganizer.id },
+        data: { invitationToken: token, invitationExpiresAt: new Date(Date.now() + 1000 * 60 * 60 * 48), invitedAt: new Date() },
+      })
+      return NextResponse.json({
+        success: true,
+        message: 'Invitation link refreshed',
+        ...createManualInvitation(origin, token),
+        organizer: { id: refreshedOrganizer.id, email: refreshedOrganizer.email, fullName: refreshedOrganizer.fullName, role: refreshedOrganizer.role, invitedAt: refreshedOrganizer.invitedAt },
+      })
     }
 
     // Validate assigned events if provided
@@ -138,6 +161,12 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('Error inviting organizer:', error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+      return NextResponse.json(
+        { error: 'Organizer already exists', message: 'An organizer with this email address already exists.' },
+        { status: 409 }
+      )
+    }
     return NextResponse.json(
       {
         error: 'Internal server error',

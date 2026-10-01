@@ -1,10 +1,14 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest, NextResponse, after } from 'next/server';
 import { authenticateOrganizerRequest } from '@/lib/auth/organizer-auth';
 import { prisma } from '@/lib/db/client';
 import { logSystemEvent } from '@/lib/db/queries/activity';
-import { getAttendanceStudentByStudentId } from '@/lib/db/queries/attendance-student-lookup';
+import { getAttendanceStudentByStudentId, getAttendanceStudentPreview, warmAttendanceStudentLookup } from '@/lib/db/queries/attendance-student-lookup';
 import { z } from 'zod';
 import { Prisma } from '@prisma/client';
+
+function logAfterResponse(...args: Parameters<typeof logSystemEvent>) {
+  after(() => logSystemEvent(...args));
+}
 
 // Validation schema for attendance recording
 const recordAttendanceSchema = z.object({
@@ -40,18 +44,6 @@ export async function POST(request: NextRequest) {
 
     const user = authResult.user!;
 
-    // Get organizer record from database
-    const organizer = await prisma.organizer.findUnique({
-      where: { email: user.email! },
-    });
-
-    if (!organizer) {
-      return NextResponse.json(
-        { error: 'Organizer not found' },
-        { status: 404 }
-      );
-    }
-
     const body = await request.json();
 
     // Validate request body
@@ -73,15 +65,8 @@ export async function POST(request: NextRequest) {
 
     const { studentId, sessionId, scanType } = validationResult.data;
 
-    console.log('🔍 Received request data:', {
-      studentId,
-      sessionId,
-      scanType,
-      originalBody: body
-    });
-
-    // Resolve the session and student concurrently. The access assignment is
-    // checked as part of the session query to avoid a separate round trip.
+    // Resolve the organizer assignment with the session, avoiding a separate
+    // organizer query on every scan. Student lookup runs in parallel.
     const [session, student] = await Promise.all([
       prisma.session.findUnique({
         where: { id: sessionId },
@@ -93,10 +78,10 @@ export async function POST(request: NextRequest) {
               isActive: true,
               organizerAssignments: {
                 where: {
-                  organizerId: organizer.id,
+                  organizer: { email: user.email! },
                   isActive: true,
                 },
-                select: { id: true },
+                select: { organizerId: true },
               },
             },
           },
@@ -104,9 +89,13 @@ export async function POST(request: NextRequest) {
       }),
       getAttendanceStudentByStudentId(studentId),
     ]);
+    const organizer = {
+      id: session?.event.organizerAssignments[0]?.organizerId || '',
+      email: user.email!,
+    };
 
     if (!session) {
-      await logSystemEvent(
+      logAfterResponse(
         'attendance_recording_failed',
         `Attendance recording failed: Session not found (ID: ${sessionId})`,
         'warning',
@@ -126,7 +115,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!session.event.isActive) {
-      await logSystemEvent(
+      logAfterResponse(
         'attendance_recording_failed',
         `Attendance recording failed: Event is inactive (Event ID: ${session.event.id})`,
         'warning',
@@ -148,7 +137,7 @@ export async function POST(request: NextRequest) {
 
     // Check the assignment returned with the session query.
     if (session.event.organizerAssignments.length === 0) {
-      await logSystemEvent(
+      logAfterResponse(
         'attendance_recording_failed',
         `Attendance recording failed: Organizer not assigned to event (Organizer: ${organizer.id}, Event: ${session.event.id})`,
         'warning',
@@ -170,7 +159,7 @@ export async function POST(request: NextRequest) {
 
     // Verify student exists (search by student ID number, not database ID)
     if (!student) {
-      await logSystemEvent(
+      logAfterResponse(
         'attendance_recording_failed',
         `Attendance recording failed: Student not found (Student ID Number: ${studentId})`,
         'warning',
@@ -195,13 +184,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for existing attendance records and validate scan sequence
-    console.log('🔍 Checking for duplicate attendance:', {
-      studentId: student.id,
-      studentIdNumber: student.studentIdNumber,
-      sessionId,
-      scanType
-    });
-    
     // Get existing attendance record for this student in this session
     // We only need one record per student per session (stores both timeIn and timeOut)
     const existingRecord = await prisma.attendance.findFirst({
@@ -211,11 +193,9 @@ export async function POST(request: NextRequest) {
       },
       orderBy: { createdAt: 'desc' },
     });
-    console.log('🔍 Existing attendance record:', existingRecord);
-
     // Validate scan sequence and prevent duplicates
     if (scanType === 'time_in' && existingRecord && existingRecord.timeIn) {
-      await logSystemEvent(
+      logAfterResponse(
         'attendance_recording_failed',
         `Attendance recording failed: Time-in already recorded (Student: ${studentId}, Session: ${sessionId})`,
         'warning',
@@ -251,7 +231,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (scanType === 'time_out' && existingRecord && existingRecord.timeOut) {
-      await logSystemEvent(
+      logAfterResponse(
         'attendance_recording_failed',
         `Attendance recording failed: Time-out already recorded (Student: ${studentId}, Session: ${sessionId})`,
         'warning',
@@ -288,7 +268,7 @@ export async function POST(request: NextRequest) {
 
     // Validate scan sequence - cannot check out without checking in first
     if (scanType === 'time_out' && !existingRecord) {
-      await logSystemEvent(
+      logAfterResponse(
         'attendance_recording_failed',
         `Attendance recording failed: Cannot scan time-out without time-in (Student: ${studentId}, Session: ${sessionId})`,
         'warning',
@@ -318,32 +298,10 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // Create or update attendance record
-    // For time_in: Create new record
-    // For time_out: Update existing record with timeOut timestamp
-    const attendance = await prisma.$transaction(async (transaction) => {
-      const latestRecord = await transaction.attendance.findFirst({
-        where: {
-          studentId: student.id,
-          sessionId,
-        },
-        orderBy: { createdAt: 'desc' },
-      });
-
-      if (scanType === 'time_in' && latestRecord?.timeIn) {
-        const duplicateError = new Error('Attendance already recorded');
-        duplicateError.name = 'AttendanceConflict';
-        throw duplicateError;
-      }
-
-      if (scanType === 'time_out' && latestRecord?.timeOut) {
-        const duplicateError = new Error('Attendance already recorded');
-        duplicateError.name = 'AttendanceConflict';
-        throw duplicateError;
-      }
-
-      if (scanType === 'time_in') {
-        return transaction.attendance.create({
+    // The first read already checked the sequence. A conditional write keeps
+    // concurrent scans safe without a second read inside a transaction.
+    const attendance = scanType === 'time_in'
+      ? await prisma.attendance.create({
           data: {
             studentId: student.id,
             eventId: session.event.id,
@@ -355,12 +313,9 @@ export async function POST(request: NextRequest) {
             ipAddress,
             userAgent,
           },
-        });
-      }
-
-      if (latestRecord) {
-        return transaction.attendance.update({
-          where: { id: latestRecord.id },
+        })
+      : await prisma.attendance.update({
+          where: { id: existingRecord!.id, timeOut: null },
           data: {
             timeOut: new Date(),
             scanType: 'time_out',
@@ -369,15 +324,11 @@ export async function POST(request: NextRequest) {
             userAgent,
           },
         });
-      }
-
-      throw new Error('Invalid state: existingRecord is null for time_out scan');
-    });
 
     const processingDuration = Date.now() - startTime;
 
     // Log successful attendance recording
-    await logSystemEvent(
+    logAfterResponse(
       'attendance_recorded',
       `Attendance recorded successfully: ${student.firstName} ${student.lastName} (${student.studentIdNumber}) - ${scanType}`,
       'info',
@@ -429,19 +380,9 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const processingDuration = Date.now() - startTime;
 
-    if (error instanceof Error && error.name === 'AttendanceConflict') {
-      return NextResponse.json(
-        {
-          error: 'Attendance already recorded',
-          message: 'Attendance has already been recorded for this student in this session',
-        },
-        { status: 409 }
-      );
-    }
-
     // A concurrent time-in can win the unique constraint after both requests
     // pass the read checks. Treat that race as an expected duplicate.
-    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && (error.code === 'P2002' || error.code === 'P2025')) {
       return NextResponse.json(
         {
           error: 'Attendance already recorded',
@@ -452,7 +393,7 @@ export async function POST(request: NextRequest) {
     }
     
     // Log attendance recording failure
-    await logSystemEvent(
+    logAfterResponse(
       'attendance_recording_failed',
       `Attendance recording failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
       'error',
@@ -506,6 +447,24 @@ export async function GET(request: NextRequest) {
     // Get query parameters
     const { searchParams } = new URL(request.url);
     const sessionId = searchParams.get('sessionId');
+    if (searchParams.get('warmup') === 'students') {
+      if (!sessionId) return NextResponse.json({ error: 'Session ID is required' }, { status: 400 });
+      const assignedSession = await prisma.session.findFirst({
+        where: {
+          id: sessionId,
+          isActive: true,
+          event: { organizerAssignments: { some: { organizerId: organizer.id, isActive: true } } },
+        },
+        select: { id: true },
+      });
+      if (!assignedSession) return NextResponse.json({ error: 'Session not found' }, { status: 404 });
+      await warmAttendanceStudentLookup();
+      const students = getAttendanceStudentPreview();
+      return NextResponse.json(
+        { success: true, students: students ?? [], complete: students !== null },
+        { headers: { 'Cache-Control': 'private, no-store' } }
+      );
+    }
     const eventId = searchParams.get('eventId');
     const limit = parseInt(searchParams.get('limit') || '50');
     const offset = parseInt(searchParams.get('offset') || '0');

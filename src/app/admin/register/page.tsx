@@ -18,7 +18,7 @@ export default function AdminRegisterPage() {
   const [addAnother, setAddAnother] = useState(true)
   const [formKey, setFormKey] = useState(0) // remount form to reset after success
 
-  async function handleSubmit(data: StudentFormInput): Promise<void> {
+  async function handleSubmit(data: StudentFormInput): Promise<{ studentId?: string } | void> {
     setIsSubmitting(true)
     try {
       const res = await fetch('/api/admin/register', {
@@ -35,15 +35,18 @@ export default function AdminRegisterPage() {
         throw new Error(maybeJson.error || 'Registration failed')
       }
 
+      const result = await res.json()
       toast.success('Student registered successfully')
 
       if (addAnother) {
         // Remount form to clear fields for another entry
         setFormKey((k) => k + 1)
       }
+      return { studentId: result.student?.id }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Registration failed'
       toast.error('Registration Error', { description: message })
+      throw error
     } finally {
       setIsSubmitting(false)
     }

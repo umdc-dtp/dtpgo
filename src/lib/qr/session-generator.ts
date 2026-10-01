@@ -40,7 +40,7 @@ export async function generateSessionQRCode(
   try {
     const defaultOptions = {
       width: 300,
-      margin: 2,
+      margin: 4,
       color: {
         dark: '#000000',
         light: '#FFFFFF',
@@ -89,7 +89,7 @@ export async function generateStudentQRCode(
   try {
     const defaultOptions = {
       width: 300,
-      margin: 2,
+      margin: 4,
       color: {
         dark: '#000000',
         light: '#FFFFFF',
@@ -99,20 +99,8 @@ export async function generateStudentQRCode(
       ...options,
     };
 
-    // Create QR code data structure
-    const qrData = {
-      type: 'student_attendance',
-      studentId: studentData.studentId,
-      studentIdNumber: studentData.studentIdNumber,
-      timestamp: studentData.timestamp,
-      // Include additional data for validation
-      firstName: studentData.firstName,
-      lastName: studentData.lastName,
-      programName: studentData.programName,
-      year: studentData.year,
-    };
-
-    const qrText = JSON.stringify(qrData);
+    // The server resolves student details from this ID. A short payload is easier to scan.
+    const qrText = studentData.studentIdNumber;
     return await QRCode.toDataURL(qrText, {
       width: defaultOptions.width,
       margin: defaultOptions.margin,
@@ -134,8 +122,8 @@ export async function createBrandedSessionQRCode(
 ): Promise<Buffer> {
   try {
     const qrCodeDataUrl = await generateSessionQRCode(sessionData, {
-      width: 240,
-      margin: 2,
+      width: 260,
+      margin: 4,
       ...options,
     });
     const qrCodeBuffer = Buffer.from(qrCodeDataUrl.split(',')[1], 'base64');
@@ -213,7 +201,7 @@ export async function createBrandedStudentQRCode(
     return canvas
       .composite([
         { input: logoBuffer, top: 20, left: 120 }, // DTP logo at top center
-        { input: qrCodeBuffer, top: 120, left: 40 }, // QR code below logo
+        { input: qrCodeBuffer, top: 110, left: 30 }, // QR code below logo
       ])
       .png()
       .toBuffer();

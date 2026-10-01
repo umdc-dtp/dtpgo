@@ -7,10 +7,12 @@ import AnalyticsCards from '@/components/admin/AnalyticsCards';
 import AnalyticsCharts from '@/components/admin/AnalyticsCharts';
 
 export default async function AnalyticsPage() {
-  const totalStudents = await countStudents({});
-  const programs = await getPrograms();
-  const studentsByProgram = await countStudentsByProgram();
-  const studentsBySource = await countStudentsByRegistrationSource();
+  const [totalStudents, programs, studentsByProgram, studentsBySource] = await Promise.all([
+    countStudents({}),
+    getPrograms(),
+    countStudentsByProgram(),
+    countStudentsByRegistrationSource(),
+  ]);
 
   const chartDataByProgram = studentsByProgram.map(p => ({ name: p.program, count: p.count }));
   const chartDataBySource = studentsBySource.map(s => ({ name: s.source, count: s.count }));

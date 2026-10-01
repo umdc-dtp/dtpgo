@@ -7,10 +7,10 @@
     "seed": "dotenv -e .env.local -- tsx prisma/seed.ts"
   },
   "scripts": {
-    "dev": "next dev --turbopack",
-    "dev:network": "next dev --turbopack --hostname 0.0.0.0",
-    "build": "prisma generate && next build",
-    "build:dev": "next build --turbopack",
+    "dev": "node scripts/build-qr-worker.mjs && next dev --turbopack",
+    "dev:network": "node scripts/build-qr-worker.mjs && next dev --turbopack --hostname 0.0.0.0",
+    "build": "node scripts/build-qr-worker.mjs && prisma generate && next build",
+    "build:dev": "node scripts/build-qr-worker.mjs && next build --turbopack",
     "start": "next start",
     "lint": "next lint",
     "test": "jest",
@@ -21,6 +21,7 @@
     "db:test": "dotenv -e .env.local -- node scripts/test-db-connection.js",
     "db:generate": "dotenv -e .env.local -- prisma generate",
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
+    "db:seed": "dotenv -e .env.local -- prisma db seed",
     "db:studio": "dotenv -e .env.local -- prisma studio",
     "db:reset": "dotenv -e .env.local -- prisma migrate reset",
     "db:push": "dotenv -e .env.local -- prisma db push"
@@ -49,7 +50,6 @@
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
     "dotenv": "^17.2.3",
-    "html5-qrcode": "^2.3.8",
     "lucide-react": "^0.539.0",
     "next": "15.5.12",
     "next-auth": "5.0.0-beta.25",
@@ -68,7 +68,8 @@
     "swr": "^2.3.6",
     "tailwind-merge": "^3.3.1",
     "xlsx": "^0.18.5",
-    "zod": "^4.0.17"
+    "zod": "^4.0.17",
+    "zxing-wasm": "^3.1.4"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
@@ -79,10 +80,12 @@
     "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.1",
+    "@types/offscreencanvas": "^2019.7.3",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "dotenv-cli": "^10.0.0",
+    "esbuild": "^0.28.2",
     "eslint": "^9",
     "eslint-config-next": "15.5.12",
     "jest": "^30.1.2",

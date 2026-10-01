@@ -310,7 +310,7 @@ export function EnhancedQRCodeDisplay({
                       <p className="text-amber-800 text-sm font-semibold mb-1">Save this QR code:</p>
                       <p className="text-amber-700 text-sm leading-relaxed">
                         Screenshot or download this image to use for event check-ins.
-                        {useEnhanced && ' This enhanced version includes additional student information for better tracking.'}
+                        {useEnhanced && ' This version uses a larger, easy-to-scan student code.'}
                       </p>
                     </div>
                   </div>
@@ -335,7 +335,7 @@ export function EnhancedQRCodeDisplay({
                     </div>
                     <div className="flex items-center gap-1">
                       <Zap className="size-3 text-yellow-500" />
-                      <span>{useEnhanced ? 'Enhanced Tracking' : 'Instant Check-in'}</span>
+                      <span>{useEnhanced ? 'Easy-to-scan Code' : 'Instant Check-in'}</span>
                     </div>
                   </div>
                 </div>

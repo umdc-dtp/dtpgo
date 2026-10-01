@@ -448,7 +448,8 @@ export async function POST(request: NextRequest) {
     });
     console.log('Session created successfully:', newSession.id);
 
-    await logActivity({
+    try {
+      await logActivity({
       type: 'admin_action',
       action: 'session_created',
       description: `Admin ${adminUser.email} created new session: ${name} for event ${event.name}`,
@@ -469,7 +470,10 @@ export async function POST(request: NextRequest) {
         userAgent,
       },
       userId: adminUser.id,
-    });
+      });
+    } catch (logError) {
+      console.error('Session created, but activity logging failed:', logError);
+    }
 
     return NextResponse.json(
       { 
@@ -485,7 +489,8 @@ export async function POST(request: NextRequest) {
     console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
     console.error('Session data that caused error:', body);
     
-    await logActivity({
+    try {
+      await logActivity({
       type: 'system_event',
       action: 'session_creation_failed',
       description: `Failed to create session: ${error instanceof Error ? error.message : 'Unknown error'}`,
@@ -501,7 +506,10 @@ export async function POST(request: NextRequest) {
         userAgent,
       },
       userId: authResult?.user?.id,
-    });
+      });
+    } catch (logError) {
+      console.error('Failed to log session creation error:', logError);
+    }
     return NextResponse.json(
       {
         error: 'Internal server error',

@@ -478,9 +478,9 @@ export function SessionForm({ eventId, session, onSubmit, onCancel, onSuccess, i
         ...data,
         timeInStart: data.timeInStart.toISOString(),
         timeInEnd: data.timeInEnd.toISOString(),
-        // Explicitly handle timeout fields - send null when hasTimeout is false, ISO string when true
-        timeOutStart: data.hasTimeout && data.timeOutStart ? data.timeOutStart.toISOString() : null,
-        timeOutEnd: data.hasTimeout && data.timeOutEnd ? data.timeOutEnd.toISOString() : null,
+        // Omit disabled timeout fields; the API accepts optional strings, not null.
+        timeOutStart: data.hasTimeout && data.timeOutStart ? data.timeOutStart.toISOString() : undefined,
+        timeOutEnd: data.hasTimeout && data.timeOutEnd ? data.timeOutEnd.toISOString() : undefined,
       };
 
       console.log('Submitting session form data:', formData);
@@ -824,7 +824,6 @@ export function SessionForm({ eventId, session, onSubmit, onCancel, onSuccess, i
             submitStatus === 'success' && "bg-green-600 hover:bg-green-700 text-white",
             submitStatus === 'error' && "bg-red-600 hover:bg-red-700 text-white",
             submitStatus === 'conflict' && "bg-orange-600 hover:bg-orange-700 text-white",
-            !isSubmitting && canSubmit() && submitStatus === 'idle' && "hover:scale-105 focus:scale-105" // Subtle scale effect when ready
           )}
           onClick={() => {
             console.log('Submit button clicked');

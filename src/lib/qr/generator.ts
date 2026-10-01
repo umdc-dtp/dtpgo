@@ -13,7 +13,7 @@ export async function generateQRCodeDataURL(text: string, options: QROptions = {
   try {
     const defaultOptions = {
       width: 300,
-      margin: 2,
+      margin: 4,
       color: {
         dark: '#000000',
         light: '#FFFFFF',

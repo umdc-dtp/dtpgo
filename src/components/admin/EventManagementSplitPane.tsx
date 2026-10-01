@@ -17,7 +17,7 @@ import { SessionForm, SessionFormData } from '@/components/admin/SessionForm';
 import { OrganizerAssignments } from '@/components/admin/organizers/OrganizerAssignments';
 import { Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
-import { eventFeedback, sessionFeedback, genericFeedback } from '@/lib/utils/toast-feedback';
+import { eventFeedback, sessionFeedback } from '@/lib/utils/toast-feedback';
 import { 
   EventsListSkeleton, 
   EventDetailsSkeleton, 
@@ -457,7 +457,7 @@ export function EventManagementSplitPane() {
   };
 
   const handleEditSessionSubmit = async (sessionData: SessionFormData) => {
-    if (!selectedSessionId || !selectedEvent) return;
+    if (!selectedSessionId || !selectedEvent) throw new Error('Select a session to edit');
 
     const session = selectedEvent.sessions.find(s => s.id === selectedSessionId);
     const sessionName = session?.name || 'Session';
@@ -474,54 +474,35 @@ export function EventManagementSplitPane() {
 
       const data = await response.json();
 
-      if (data.success) {
+      if (response.ok && data.success) {
         sessionFeedback.update.success(sessionName, String(toastId));
-        setIsEditSessionOpen(false);
-        setSelectedSessionId(null);
         await fetchEvents(); // Refresh to get updated session data
       } else {
-        throw new Error(data.error || 'Failed to update session');
+        throw new Error(data.details?.[0]?.message || data.error || 'Failed to update session');
       }
     } catch (err: unknown) {
       sessionFeedback.update.error(sessionName, err instanceof Error ? err.message : 'Failed to update session', String(toastId));
+      throw err;
     }
   };
 
   const handleCreateSessionSubmit = async (sessionData: SessionFormData) => {
-    if (!selectedEvent) return;
+    if (!selectedEvent) throw new Error('Select an event before creating a session');
 
     const sessionName = sessionData.name || 'New Session';
     const toastId = sessionFeedback.create.loading(sessionName);
 
     try {
-      // Get organizer IDs from the event's organizer assignments
-      console.log('Event organizer assignments:', selectedEvent.organizerAssignments);
-      const organizerIds = selectedEvent.organizerAssignments.length > 0 
-        ? selectedEvent.organizerAssignments.map(assignment => assignment.organizer.id)
-        : []; // Fallback to empty array if no organizers assigned
-
-      console.log('Organizer IDs:', organizerIds);
-
-      // Check if we have organizers assigned
+      const organizerIds = selectedEvent.organizerAssignments.map(assignment => assignment.organizer.id);
       if (organizerIds.length === 0) {
-        console.log('No organizers found, using placeholder organizer for testing');
-        // For now, use a placeholder organizer ID to allow testing
-        organizerIds.push('clx1234567890123456789012');
-        genericFeedback.warning('No organizers assigned', 'Using placeholder organizer for testing.');
+        throw new Error('Assign an organizer to this event before creating a session');
       }
-
-      console.log('Proceeding with session creation with organizers:', organizerIds);
 
       const requestBody = {
         ...sessionData,
         eventId: selectedEvent.id,
-        organizerIds: organizerIds,
+        organizerIds,
       };
-
-      console.log('Sending session creation request:', requestBody);
-      console.log('Request body JSON:', JSON.stringify(requestBody, null, 2));
-
-      console.log('Making API call to /api/admin/sessions...');
       const response = await fetch('/api/admin/sessions', {
         method: 'POST',
         headers: {
@@ -529,38 +510,23 @@ export function EventManagementSplitPane() {
         },
         body: JSON.stringify(requestBody),
       });
-      console.log('API call completed, response received');
+      const data = await response.json();
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-      let data;
-      try {
-        data = await response.json();
-        console.log('Response data:', data);
-      } catch (parseError) {
-        console.error('Failed to parse JSON response:', parseError);
-        const textResponse = await response.text();
-        console.error('Raw response text:', textResponse);
-        throw new Error('Invalid response format from server');
-      }
-
-      if (data.success) {
+      if (response.ok && data.success && data.session?.id) {
         sessionFeedback.create.success(sessionName, String(toastId));
-        setIsCreateSessionOpen(false);
         await fetchEvents(); // Refresh to get updated session data
       } else {
-        console.error('Session creation failed:', data);
-        
-        // Handle conflict errors specifically
-        if (response.status === 409 && data.conflictingSessions) {
+        if (response.status === 409 && data.conflictingSessions?.length) {
           sessionFeedback.create.conflict(sessionName, data.conflictingSessions, String(toastId));
-        } else {
-          throw new Error(data.error || 'Failed to create session');
+          throw new Error(`Session time conflicts with ${data.conflictingSessions.join(', ')}`);
         }
+        throw new Error(data.details?.[0]?.message || data.error || 'Failed to create session');
       }
     } catch (err: unknown) {
-      sessionFeedback.create.error(sessionName, err instanceof Error ? err.message : 'Failed to create session', String(toastId));
+      if (!(err instanceof Error && err.message.startsWith('Session time conflicts with '))) {
+        sessionFeedback.create.error(sessionName, err instanceof Error ? err.message : 'Failed to create session', String(toastId));
+      }
+      throw err;
     }
   };
 

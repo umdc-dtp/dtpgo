@@ -44,6 +44,7 @@ export function InviteOrganizerForm({
   const [invitationSuccess, setInvitationSuccess] = useState(false);
   const [inviteLink, setInviteLink] = useState('');
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
@@ -78,6 +79,8 @@ export function InviteOrganizerForm({
   const roleValue = form.watch('role');
 
   const handleFormSubmit: SubmitHandler<InviteOrganizerFormInput> = async (data) => {
+    if (submitting || isSubmitting) return;
+    setSubmitting(true);
     try {
       setInvitationSuccess(false);
       setInviteLink('');
@@ -105,17 +108,18 @@ export function InviteOrganizerForm({
         throw new Error('Invitation link was not returned');
       }
       setInviteLink(resJson.inviteLink);
-      toast.success('Invitation link created');
+      toast.success(resJson.message || 'Invitation link created');
 
       setInvitationSuccess(true);
       form.reset();
       setSelectedEvents([]);
     } catch (error) {
       setInvitationSuccess(false);
-      console.error('Invitation failed:', error);
       toast.error('Failed to create invitation', {
         description: error instanceof Error ? error.message : 'An unexpected error occurred',
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -354,16 +358,16 @@ export function InviteOrganizerForm({
               <div className="pt-4">
                 <Button 
                   type="submit" 
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || submitting}
                   className={`w-full h-12 font-semibold shadow-lg hover:shadow-xl transition-all duration-200 group/btn ${
-                    isSubmitting 
+                    isSubmitting || submitting
                       ? 'bg-gray-300 text-gray-500 cursor-not-allowed hover:bg-gray-300 hover:shadow-lg' 
                       : invitationSuccess
                       ? 'bg-green-500 hover:bg-green-600 text-white'
                       : 'bg-yellow-500 hover:bg-yellow-600 text-black'
                   }`}
                 >
-                  {isSubmitting ? (
+                  {isSubmitting || submitting ? (
                     <div className="flex items-center gap-2">
                       <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-400 border-t-transparent" />
                       <span>Creating Invitation...</span>

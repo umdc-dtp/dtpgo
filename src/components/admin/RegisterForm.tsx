@@ -12,6 +12,7 @@ import { QRCodeDisplay } from '@/components/ui/QRCodeDisplay';
 import { toast } from 'sonner';
 import { User, Mail, GraduationCap, Calendar, CheckCircle, UserPlus } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import useSWR from 'swr';
 
 type Program = {
   id: string;
@@ -37,30 +38,25 @@ const EMAIL_DOMAINS = [
 ];
 
 export function RegisterForm({ onSubmit, isSubmitting, initialData, hideHeader = false }: RegisterFormProps) {
-  const [programs, setPrograms] = useState<Program[]>([]);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
   const [registeredStudentId, setRegisteredStudentId] = useState<string | null>(null);
   const [showEmailSuggestions, setShowEmailSuggestions] = useState(false);
   const [emailSuggestions, setEmailSuggestions] = useState<string[]>([]);
   const { user, loading: authLoading } = useAuth();
+  const { data: programs = [], error: programsError, isLoading: programsLoading } = useSWR<Program[]>(
+    user && !authLoading ? '/api/admin/programs' : null,
+    async (url: string) => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch programs');
+      const data = await res.json();
+      return data.programs ?? [];
+    },
+    { revalidateOnFocus: false }
+  );
 
   useEffect(() => {
-    async function fetchPrograms() {
-      // Only fetch programs if user is authenticated
-      if (!user || authLoading) return;
-      
-      try {
-        const res = await fetch('/api/admin/programs');
-        if (!res.ok) throw new Error('Failed to fetch programs');
-        const data = await res.json();
-        setPrograms(data.programs ?? []);
-      } catch (error) {
-        console.error('Failed to load programs:', error);
-        toast.error('Failed to load programs');
-      }
-    }
-    fetchPrograms();
-  }, [user, authLoading]);
+    if (programsError) toast.error('Failed to load programs');
+  }, [programsError]);
 
   const form = useForm<StudentFormInput>({
     resolver: zodResolver(studentSchema),
@@ -158,7 +154,7 @@ export function RegisterForm({ onSubmit, isSubmitting, initialData, hideHeader =
   }
 
   // Show loading state while programs are being fetched
-  if (authLoading || (user && programs.length === 0)) {
+  if (authLoading || (user && programsLoading && !programsError)) {
     return (
       <div className="py-2 sm:py-4">
         <div className="relative">

@@ -44,6 +44,7 @@ import { OrganizerCard } from './OrganizerCard';
 import { OrganizerActions } from './OrganizerActions';
 import { BulkAssignmentModal } from './BulkAssignmentModal';
 import { toast } from 'sonner';
+import { useRouter } from 'next/navigation';
 // import Link from 'next/link';
 
 interface OrganizerListProps {
@@ -51,6 +52,7 @@ interface OrganizerListProps {
 }
 
 export function OrganizerList({ searchQuery = '' }: OrganizerListProps) {
+  const router = useRouter();
   const [search, setSearch] = useState(searchQuery);
   const [roleFilter, setRoleFilter] = useState<'all' | 'organizer' | 'admin'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
@@ -383,7 +385,7 @@ export function OrganizerList({ searchQuery = '' }: OrganizerListProps) {
                             }}
                             onResendInvitation={createInvitationLink}
                             onViewDetails={(org) => {
-                              window.location.href = `/admin/organizers/${org.id}`;
+                              router.push(`/admin/organizers/${org.id}`);
                             }}
                             onManageAssignments={(_org) => {
                               setShowBulkAssignmentModal(true);
@@ -408,7 +410,7 @@ export function OrganizerList({ searchQuery = '' }: OrganizerListProps) {
                     organizer={organizer}
                     onViewDetails={(org) => {
                       // Navigate to organizer details
-                      window.location.href = `/admin/organizers/${org.id}`;
+                      router.push(`/admin/organizers/${org.id}`);
                     }}
                     onEdit={(org) => {
                       // Handle edit action
